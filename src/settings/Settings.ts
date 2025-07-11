@@ -40,6 +40,7 @@ export interface BetterWordCountSettings {
   statusBar: StatusBarItem[];
   altBar: StatusBarItem[];
   countComments: boolean;
+  countOnlyVisible: boolean;
   collectStats: boolean;
   pageWords: number;
   displaySectionCounts: boolean;
@@ -76,6 +77,7 @@ export const DEFAULT_SETTINGS: BetterWordCountSettings = {
     },
   ],
   countComments: false,
+  countOnlyVisible: false,
   collectStats: false,
   displaySectionCounts: false,
   pageWords: 300,

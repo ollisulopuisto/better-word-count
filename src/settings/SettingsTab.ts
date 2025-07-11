@@ -38,6 +38,16 @@ export default class BetterWordCountSettingsTab extends PluginSettingTab {
         });
       });
     new Setting(containerEl)
+      .setName("Count only visible text")
+      .setDesc("Turn on to count only text that is visible in the preview.")
+      .addToggle((cb: ToggleComponent) => {
+        cb.setValue(this.plugin.settings.countOnlyVisible);
+        cb.onChange(async (value: boolean) => {
+          this.plugin.settings.countOnlyVisible = value;
+          await this.plugin.saveSettings();
+        });
+      });
+    new Setting(containerEl)
       .setName("Display Section Word Count")
       .setDesc("Turn on if you want to display section word counts next to headings.")
       .addToggle((cb: ToggleComponent) => {

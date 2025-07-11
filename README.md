@@ -15,6 +15,7 @@ This plugin is the same as the built-in **Word Count** plugin, except when you s
   - Total Words, Characters, Sentences, Footnotes, Pandoc Citations, and Files in vault.
   - Words, Characters, Sentences, Footnotes, and Pandoc Citations typed today.
 - Highly Customizable status bar that can be adapted to your needs.
+- Option to exclude markdown formatting from the count.
 
 ## Contributors
 
@@ -33,6 +34,8 @@ This plugin is the same as the built-in **Word Count** plugin, except when you s
   - Fixed alt bar spacing issue.
 - @mgmeyers
   - Added word counts to section titles.
+- @ollisulopuisto
+  - Ignore comments from the word count.
 
 ### Special Thanks
 
