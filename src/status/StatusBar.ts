@@ -5,6 +5,7 @@ import {
   getCharacterCount,
   getSentenceCount,
   getFootnoteCount,
+  getCitationCount,
   getPageCount,
   cleanComments,
 } from "src/utils/StatUtils";
@@ -20,7 +21,7 @@ export default class StatusBar {
     this.plugin = plugin;
     // Increased debounce time to prevent race conditions with UI updates
     this.debounceStatusBarUpdate = debounce(
-      (text: string) => this.updateStatusBar(text),
+      (text?: string) => this.updateStatusBar(text),
       250,
       false
     );
