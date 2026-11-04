@@ -37,6 +37,7 @@ assert.strictEqual(getCharacterCount("hello world\n"), 12, "Characters with newl
 // 3. getFootnoteCount tests
 assert.strictEqual(getFootnoteCount(""), 0, "Empty string 0 footnotes");
 assert.strictEqual(getFootnoteCount("No footnotes here"), 0, "0 footnotes in normal text");
+assert.strictEqual(getFootnoteCount("Contains a caret symbol ^ without footnote syntax"), 0, "Non-footnote caret");
 assert.strictEqual(getFootnoteCount("Here is a regular footnote[^1] and another[^note]."), 2, "Regular footnotes");
 assert.strictEqual(getFootnoteCount("Here is an inline footnote^[with text]."), 1, "Inline footnotes");
 assert.strictEqual(getFootnoteCount("[^1]: Definition should not match regular footnote call"), 0, "Footnote definition excluded");
@@ -45,6 +46,8 @@ assert.strictEqual(getFootnoteCount("Regular[^1] and inline^[note]."), 2, "Combi
 // 4. getCitationCount tests
 assert.strictEqual(getCitationCount(""), 0, "Empty string 0 citations");
 assert.strictEqual(getCitationCount("No citations"), 0, "0 citations in normal text");
+assert.strictEqual(getCitationCount("Email user@example.com should not count as citation"), 0, "Email with @ symbol");
+assert.strictEqual(getCitationCount("@author(2020) with parentheses should not match negative lookahead"), 0, "Citation with parenthesis");
 assert.strictEqual(getCitationCount("According to @smith2020; and @jones2021;"), 2, "2 distinct citations");
 assert.strictEqual(getCitationCount("@smith2020; repeated @smith2020;"), 1, "Duplicate citations counted once");
 
@@ -64,7 +67,7 @@ assert.strictEqual(cleanComments("Hello %%secret comment%% world"), "Hello  worl
 assert.strictEqual(cleanComments("Hello <!-- html comment --> world"), "Hello  world", "HTML comment stripped");
 assert.strictEqual(cleanComments("Start %%c1%% middle <!--c2--> end"), "Start  middle  end", "Both comments stripped");
 
-console.log("✓ All 25 correctness assertions passed!\n");
+console.log("✓ All 28 correctness assertions passed!\n");
 
 // === Benchmarks ===
 console.log("=== Running StatUtils performance benchmarks ===");
@@ -108,5 +111,24 @@ for (let iter = 0; iter < commentsIters; iter++) {
 }
 const commentsDuration = Date.now() - tStartComments;
 console.log(`cleanComments fast-path (${commentsIters} runs on ~28k word doc): ${commentsDuration}ms`);
+
+// Benchmark 4: getFootnoteCount and getCitationCount fast-paths on document without footnotes/citations
+const fnIters = 5000;
+const tStartFn = Date.now();
+let totalFn = 0;
+for (let iter = 0; iter < fnIters; iter++) {
+  totalFn += getFootnoteCount(sampleDoc);
+}
+const fnDuration = Date.now() - tStartFn;
+console.log(`getFootnoteCount fast-path (${fnIters} runs on ~28k word doc): ${fnDuration}ms`);
+
+const citeIters = 5000;
+const tStartCite = Date.now();
+let totalCite = 0;
+for (let iter = 0; iter < citeIters; iter++) {
+  totalCite += getCitationCount(sampleDoc);
+}
+const citeDuration = Date.now() - tStartCite;
+console.log(`getCitationCount fast-path (${citeIters} runs on ~28k word doc): ${citeDuration}ms`);
 
 console.log("\n✓ All benchmark runs completed successfully!");
