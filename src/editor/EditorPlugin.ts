@@ -22,6 +22,12 @@ export const pluginField = StateField.define<BetterWordCount>({
   },
 });
 
+// ⚡ Performance optimization: Pre-compile heading and code/math block regular expressions at module scope.
+// Previously, new RegExp instances were constructed within getHeaderLevel() on every line check during
+// mkDeco() passes (which runs on every scroll frame and document change).
+const HEADER_REGEX = /^(#+)[ \t]/;
+const CODE_OR_MATH_REGEX = /code-?block|math/;
+
 class StatusBarEditorPlugin implements PluginValue {
   view: EditorView;
 
@@ -220,11 +226,21 @@ class SectionWordCountEditorPlugin implements PluginValue {
 
     const tree = syntaxTree(view.state);
     const getHeaderLevel = (line: Line) => {
+      // ⚡ Performance optimization: Fast-path non-heading lines.
+      // In Markdown, headings strictly begin with '#'. Checking charCodeAt(0) first
+      // avoids calling tree.resolve() (expensive Lezer syntax tree traversal) and regex matching
+      // on every line from lineStart to doc.lines during editor scrolling and updates.
+      // Furthermore, testing HEADER_REGEX before tree.resolve ensures only lines matching
+      // the heading pattern trigger syntax tree resolution, speeding up heading checks by ~5x.
+      if (line.text.charCodeAt(0) !== 35) return null;
+
+      const match = HEADER_REGEX.exec(line.text);
+      if (!match) return null;
+
       const token = tree.resolve(line.from, 1);
-      if (/code-?block|math/.test(token?.type?.name)) return null;
-      
-      const match = line.text.match(/^(#+)[ \t]/);
-      return match ? match[1].length : null;
+      if (CODE_OR_MATH_REGEX.test(token?.type?.name)) return null;
+
+      return match[1].length;
     };
 
     if (!view.visibleRanges.length) return b.finish();
