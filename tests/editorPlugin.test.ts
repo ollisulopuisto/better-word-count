@@ -185,4 +185,169 @@ console.log(`Optimized getHeaderLevel (3,000 lines x ${iters} runs): ${optimized
 const speedup = (originalDuration / optimizedDuration).toFixed(2);
 console.log(`Speedup: ${speedup}x faster (${((1 - optimizedDuration / originalDuration) * 100).toFixed(1)}% reduction in CPU time)\n`);
 
+// =====================================================================
+// Comment Stripping & calculateLineCounts Correctness and Benchmark Tests
+// =====================================================================
+import { MATCH_COMMENT, MATCH_HTML_COMMENT } from "../src/constants";
+import { getWordCount } from "../src/utils/StatUtils";
+
+console.log("\n=== Running calculateLineCounts comment stripping correctness tests ===");
+
+function stripCommentsOriginal(docStr: string): string {
+  const preserveNl = (match: string, offset: number, str: string) => {
+    let output = "";
+    for (let i = offset, len = offset + match.length; i < len; i++) {
+      if (/[\r\n]/.test(str[i])) {
+        output += str[i];
+      }
+    }
+    return output;
+  };
+  return docStr.replace(MATCH_COMMENT, preserveNl).replace(MATCH_HTML_COMMENT, preserveNl);
+}
+
+function stripCommentsOptimized(docStr: string): string {
+  const hasPercent = docStr.includes("%%");
+  const hasLt = docStr.includes("<");
+  if (hasPercent || hasLt) {
+    const preserveNl = (match: string) => {
+      let output = "";
+      for (let i = 0, len = match.length; i < len; i++) {
+        const code = match.charCodeAt(i);
+        if (code === 10 || code === 13) {
+          output += match[i];
+        }
+      }
+      return output;
+    };
+
+    if (hasPercent) docStr = docStr.replace(MATCH_COMMENT, preserveNl);
+    if (hasLt) docStr = docStr.replace(MATCH_HTML_COMMENT, preserveNl);
+  }
+  return docStr;
+}
+
+function computeLineCounts(docStr: string, stripFunc: (s: string) => string): number[] {
+  const cleaned = stripFunc(docStr);
+  const lines = cleaned.split(/\r\n?|\n/);
+  return lines.map((l) => getWordCount(l));
+}
+
+const commentTestDocs: { name: string; content: string }[] = [
+  { name: "Empty string", content: "" },
+  { name: "Single line without comments", content: "Hello world this is a test" },
+  {
+    name: "Multi-line document without comments",
+    content: "# Heading 1\nLine one of text.\n\nLine two of text.\n",
+  },
+  {
+    name: "Inline obsidian comment",
+    content: "Visible text %% hidden comment %% more visible text",
+  },
+  {
+    name: "Multiline obsidian comment",
+    content: "Before comment\n%% comment line 1\ncomment line 2 %%\nAfter comment",
+  },
+  {
+    name: "HTML comment",
+    content: "Start <!-- html comment here --> finish",
+  },
+  {
+    name: "Multiline HTML comment",
+    content: "Start <!-- html line 1\nhtml line 2 --> finish",
+  },
+  {
+    name: "Both Obsidian and HTML comments in doc",
+    content: "# Intro\n%% obsidian note %%\nBody text.\n<!-- html footnote -->\nConclusion.",
+  },
+  {
+    name: "Document with CRLF line endings",
+    content: "Line 1\r\n%% comment\r\nstill comment %%\r\nLine 2\r\n",
+  },
+];
+
+for (const testDoc of commentTestDocs) {
+  const originalStr = stripCommentsOriginal(testDoc.content);
+  const optimizedStr = stripCommentsOptimized(testDoc.content);
+
+  assert.strictEqual(
+    optimizedStr,
+    originalStr,
+    `Stripped text mismatch in "${testDoc.name}":\nOriginal:  ${JSON.stringify(originalStr)}\nOptimized: ${JSON.stringify(optimizedStr)}`
+  );
+
+  const origCounts = computeLineCounts(testDoc.content, stripCommentsOriginal);
+  const optCounts = computeLineCounts(testDoc.content, stripCommentsOptimized);
+
+  assert.deepStrictEqual(
+    optCounts,
+    origCounts,
+    `Line word counts mismatch in "${testDoc.name}"`
+  );
+}
+
+console.log(`✓ All ${commentTestDocs.length} comment stripping correctness assertions passed!\n`);
+
+// === Benchmarks for Comment Stripping ===
+console.log("=== Running calculateLineCounts comment stripping performance benchmarks ===");
+
+// 1. Realistic markdown note without comments (the common case: ~95% of notes)
+const noteWithoutComments = lines.map((l) => l.text).join("\n"); // 3,000 lines
+const stripItersWithoutComments = 1000;
+
+const tStartStripOrigNoComments = Date.now();
+for (let iter = 0; iter < stripItersWithoutComments; iter++) {
+  stripCommentsOriginal(noteWithoutComments);
+}
+const durStripOrigNoComments = Date.now() - tStartStripOrigNoComments;
+
+const tStartStripOptNoComments = Date.now();
+for (let iter = 0; iter < stripItersWithoutComments; iter++) {
+  stripCommentsOptimized(noteWithoutComments);
+}
+const durStripOptNoComments = Date.now() - tStartStripOptNoComments;
+
+console.log(
+  `Original stripComments  (3,000 lines without comments x ${stripItersWithoutComments} runs): ${durStripOrigNoComments}ms`
+);
+console.log(
+  `Optimized stripComments (3,000 lines without comments x ${stripItersWithoutComments} runs): ${durStripOptNoComments}ms`
+);
+const speedupNoComments = (durStripOrigNoComments / durStripOptNoComments).toFixed(2);
+console.log(`Speedup (notes without comments): ${speedupNoComments}x faster\n`);
+
+// 2. Note with comments
+const noteWithComments =
+  lines
+    .map((l, i) =>
+      i % 20 === 0
+        ? `${l.text} %% comment for line ${i} %%`
+        : i % 35 === 0
+        ? `<!-- html comment ${i} --> ${l.text}`
+        : l.text
+    )
+    .join("\n");
+const stripItersWithComments = 200;
+
+const tStartStripOrigComments = Date.now();
+for (let iter = 0; iter < stripItersWithComments; iter++) {
+  stripCommentsOriginal(noteWithComments);
+}
+const durStripOrigComments = Date.now() - tStartStripOrigComments;
+
+const tStartStripOptComments = Date.now();
+for (let iter = 0; iter < stripItersWithComments; iter++) {
+  stripCommentsOptimized(noteWithComments);
+}
+const durStripOptComments = Date.now() - tStartStripOptComments;
+
+console.log(
+  `Original stripComments  (3,000 lines with comments x ${stripItersWithComments} runs): ${durStripOrigComments}ms`
+);
+console.log(
+  `Optimized stripComments (3,000 lines with comments x ${stripItersWithComments} runs): ${durStripOptComments}ms`
+);
+const speedupComments = (durStripOrigComments / durStripOptComments).toFixed(2);
+console.log(`Speedup (notes with comments): ${speedupComments}x faster\n`);
+
 console.log("✓ All editor plugin tests and benchmarks completed successfully!");
