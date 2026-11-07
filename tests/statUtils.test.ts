@@ -60,6 +60,30 @@ assert.strictEqual(getSentenceCount('He said, "Stop!" Then he left.'), 2, "Quote
 assert.strictEqual(getPageCount("word ".repeat(300), 300), 1.0, "Exact 1 page");
 assert.strictEqual(getPageCount("word ".repeat(450), 300), 1.5, "1.5 pages");
 
+// Verify that computing page count directly from currentWords matches getPageCount exactly across range of word counts
+const pageWords = 300;
+const testTexts = [
+  "",
+  "single",
+  "word ".repeat(50),
+  "word ".repeat(299),
+  "word ".repeat(300),
+  "word ".repeat(301),
+  "word ".repeat(450),
+  "word ".repeat(1234),
+  "word ".repeat(5000),
+];
+for (const text of testTexts) {
+  const currentWords = getWordCount(text);
+  const directPages = parseFloat((currentWords / pageWords).toFixed(1));
+  const helperPages = getPageCount(text, pageWords);
+  assert.strictEqual(
+    directPages,
+    helperPages,
+    `Direct page count calculation (${directPages}) must match getPageCount (${helperPages}) for ${currentWords} words`
+  );
+}
+
 // 7. cleanComments tests
 assert.strictEqual(cleanComments(""), "", "Empty string clean comments");
 assert.strictEqual(cleanComments("No comments here."), "No comments here.", "Text without comments unchanged");
@@ -130,5 +154,30 @@ for (let iter = 0; iter < citeIters; iter++) {
 }
 const citeDuration = Date.now() - tStartCite;
 console.log(`getCitationCount fast-path (${citeIters} runs on ~28k word doc): ${citeDuration}ms`);
+
+// Benchmark 5: StatsManager.change() word & page calculation - with vs without duplicate getWordCount
+const changeIters = 100;
+const tStartUnoptimizedChange = Date.now();
+for (let iter = 0; iter < changeIters; iter++) {
+  const words = getWordCount(sampleDoc);
+  const pages = getPageCount(sampleDoc, 300);
+}
+const unoptimizedChangeDuration = Date.now() - tStartUnoptimizedChange;
+
+const tStartOptimizedChange = Date.now();
+for (let iter = 0; iter < changeIters; iter++) {
+  const words = getWordCount(sampleDoc);
+  const pages = parseFloat((words / 300).toFixed(1));
+}
+const optimizedChangeDuration = Date.now() - tStartOptimizedChange;
+
+console.log(
+  `StatsManager.change word+page calculation unoptimized (${changeIters} runs on ~28k word doc): ${unoptimizedChangeDuration}ms`
+);
+console.log(
+  `StatsManager.change word+page calculation optimized   (${changeIters} runs on ~28k word doc): ${optimizedChangeDuration}ms`
+);
+const changeSpeedup = (unoptimizedChangeDuration / optimizedChangeDuration).toFixed(2);
+console.log(`Speedup: ${changeSpeedup}x faster (${((1 - optimizedChangeDuration / unoptimizedChangeDuration) * 100).toFixed(1)}% reduction in CPU time)`);
 
 console.log("\n✓ All benchmark runs completed successfully!");
