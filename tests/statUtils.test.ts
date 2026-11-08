@@ -180,4 +180,34 @@ console.log(
 const changeSpeedup = (unoptimizedChangeDuration / optimizedChangeDuration).toFixed(2);
 console.log(`Speedup: ${changeSpeedup}x faster (${((1 - optimizedChangeDuration / unoptimizedChangeDuration) * 100).toFixed(1)}% reduction in CPU time)`);
 
+// Benchmark 6: StatusBar item loop word & page calculation - with vs without lazy cached word count
+const sbIters = 100;
+const tStartSbUnoptimized = Date.now();
+for (let iter = 0; iter < sbIters; iter++) {
+  const words = getWordCount(sampleDoc);
+  const pages = getPageCount(sampleDoc, 300);
+}
+const sbUnoptimizedDuration = Date.now() - tStartSbUnoptimized;
+
+const tStartSbOptimized = Date.now();
+for (let iter = 0; iter < sbIters; iter++) {
+  let fileWordCount: number | null = null;
+  const getFileWordCount = () => {
+    if (fileWordCount === null) fileWordCount = getWordCount(sampleDoc);
+    return fileWordCount;
+  };
+  const words = getFileWordCount();
+  const pages = parseFloat((getFileWordCount() / 300).toFixed(1));
+}
+const sbOptimizedDuration = Date.now() - tStartSbOptimized;
+
+console.log(
+  `StatusBar item loop word+page unoptimized (${sbIters} runs on ~28k word doc): ${sbUnoptimizedDuration}ms`
+);
+console.log(
+  `StatusBar item loop word+page optimized   (${sbIters} runs on ~28k word doc): ${sbOptimizedDuration}ms`
+);
+const sbSpeedup = (sbUnoptimizedDuration / sbOptimizedDuration).toFixed(2);
+console.log(`Speedup: ${sbSpeedup}x faster (${((1 - sbOptimizedDuration / sbUnoptimizedDuration) * 100).toFixed(1)}% reduction in CPU time)`);
+
 console.log("\n✓ All benchmark runs completed successfully!");
