@@ -6,7 +6,6 @@ import {
   getSentenceCount,
   getFootnoteCount,
   getCitationCount,
-  getPageCount,
   cleanComments,
 } from "src/utils/StatUtils";
 import { debounce, MarkdownView } from "obsidian";
