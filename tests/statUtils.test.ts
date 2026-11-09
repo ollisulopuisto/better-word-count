@@ -210,4 +210,104 @@ console.log(
 const sbSpeedup = (sbUnoptimizedDuration / sbOptimizedDuration).toFixed(2);
 console.log(`Speedup: ${sbSpeedup}x faster (${((1 - sbOptimizedDuration / sbUnoptimizedDuration) * 100).toFixed(1)}% reduction in CPU time)`);
 
+// Benchmark 7: StatsManager daily total aggregation - Object.values vs direct for..in
+console.log("\n=== Running StatsManager daily metrics aggregation tests & benchmarks ===");
+
+interface MetricDiff {
+  initial: number;
+  current: number;
+}
+interface MockFileStat {
+  words: MetricDiff;
+  characters: MetricDiff;
+  sentences: MetricDiff;
+  footnotes: MetricDiff;
+  citations: MetricDiff;
+  pages: MetricDiff;
+}
+
+const mockModFiles: Record<string, MockFileStat> = {};
+for (let i = 0; i < 50; i++) {
+  mockModFiles[`notes/folder/note_${i}.md`] = {
+    words: { initial: 100 + i * 10, current: 250 + i * 15 },
+    characters: { initial: 500 + i * 50, current: 1200 + i * 70 },
+    sentences: { initial: 10 + i, current: 25 + i * 2 },
+    footnotes: { initial: i % 3, current: (i % 3) + 2 },
+    citations: { initial: i % 2, current: (i % 2) + 1 },
+    pages: { initial: parseFloat(((100 + i * 10) / 300).toFixed(1)), current: parseFloat(((250 + i * 15) / 300).toFixed(1)) },
+  };
+}
+
+// Function with original Object.values() implementation
+function aggregateDailyTotalsOriginal(modFiles: Record<string, MockFileStat>) {
+  let words = 0;
+  let characters = 0;
+  let sentences = 0;
+  let footnotes = 0;
+  let citations = 0;
+  let pages = 0;
+
+  const allModifiedCounts = Object.values(modFiles);
+  for (let i = 0, len = allModifiedCounts.length; i < len; i++) {
+    const counts = allModifiedCounts[i];
+    words += Math.max(0, counts.words.current - counts.words.initial);
+    characters += Math.max(0, counts.characters.current - counts.characters.initial);
+    sentences += Math.max(0, counts.sentences.current - counts.sentences.initial);
+    footnotes += Math.max(0, counts.footnotes.current - counts.footnotes.initial);
+    citations += Math.max(0, counts.citations.current - counts.citations.initial);
+    pages += Math.max(0, counts.pages.current - counts.pages.initial);
+  }
+
+  return { words, characters, sentences, footnotes, citations, pages };
+}
+
+// Function with optimized for..in implementation
+function aggregateDailyTotalsOptimized(modFiles: Record<string, MockFileStat>) {
+  let words = 0;
+  let characters = 0;
+  let sentences = 0;
+  let footnotes = 0;
+  let citations = 0;
+  let pages = 0;
+
+  for (const fileKey in modFiles) {
+    if (modFiles.hasOwnProperty(fileKey)) {
+      const counts = modFiles[fileKey];
+      words += Math.max(0, counts.words.current - counts.words.initial);
+      characters += Math.max(0, counts.characters.current - counts.characters.initial);
+      sentences += Math.max(0, counts.sentences.current - counts.sentences.initial);
+      footnotes += Math.max(0, counts.footnotes.current - counts.footnotes.initial);
+      citations += Math.max(0, counts.citations.current - counts.citations.initial);
+      pages += Math.max(0, counts.pages.current - counts.pages.initial);
+    }
+  }
+
+  return { words, characters, sentences, footnotes, citations, pages };
+}
+
+// Correctness verification
+const origDaily = aggregateDailyTotalsOriginal(mockModFiles);
+const optDaily = aggregateDailyTotalsOptimized(mockModFiles);
+assert.deepStrictEqual(optDaily, origDaily, "Optimized daily totals aggregation must match original exactly");
+console.log("✓ Daily totals aggregation correctness passed!");
+
+// Benchmark
+const aggIters = 50000;
+const tStartAggOrig = Date.now();
+for (let iter = 0; iter < aggIters; iter++) {
+  aggregateDailyTotalsOriginal(mockModFiles);
+}
+const aggOrigDuration = Date.now() - tStartAggOrig;
+
+const tStartAggOpt = Date.now();
+for (let iter = 0; iter < aggIters; iter++) {
+  aggregateDailyTotalsOptimized(mockModFiles);
+}
+const aggOptDuration = Date.now() - tStartAggOpt;
+
+console.log(`StatsManager daily totals Object.values (${mockModFiles ? Object.keys(mockModFiles).length : 0} files x ${aggIters} runs): ${aggOrigDuration}ms`);
+console.log(`StatsManager daily totals for..in       (${mockModFiles ? Object.keys(mockModFiles).length : 0} files x ${aggIters} runs): ${aggOptDuration}ms`);
+const aggSpeedup = (aggOrigDuration / aggOptDuration).toFixed(2);
+console.log(`Speedup: ${aggSpeedup}x faster (${((1 - aggOptDuration / aggOrigDuration) * 100).toFixed(1)}% reduction in CPU time)`);
+
 console.log("\n✓ All benchmark runs completed successfully!");
