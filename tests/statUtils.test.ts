@@ -7,6 +7,7 @@ Module._resolveFilename = function (request: string, parent: any, isMain: boolea
 Module._cache["obsidian"] = { id: "obsidian", filename: "obsidian", loaded: true, exports: {} };
 
 import * as assert from "assert";
+import moment from "moment";
 import {
   getWordCount,
   getCharacterCount,
@@ -16,6 +17,7 @@ import {
   getPageCount,
   cleanComments,
 } from "../src/utils/StatUtils";
+import { getTodayDateString } from "../src/stats/StatsManager";
 
 console.log("=== Running StatUtils correctness tests ===");
 
@@ -91,7 +93,29 @@ assert.strictEqual(cleanComments("Hello %%secret comment%% world"), "Hello  worl
 assert.strictEqual(cleanComments("Hello <!-- html comment --> world"), "Hello  world", "HTML comment stripped");
 assert.strictEqual(cleanComments("Start %%c1%% middle <!--c2--> end"), "Start  middle  end", "Both comments stripped");
 
-console.log("✓ All 28 correctness assertions passed!\n");
+// 8. getTodayDateString tests
+assert.strictEqual(
+  getTodayDateString(),
+  moment().format("YYYY-MM-DD"),
+  "getTodayDateString() today matches moment().format('YYYY-MM-DD')"
+);
+// Test with various sample dates
+const sampleDates = [
+  new Date(2023, 0, 1),   // 2023-01-01
+  new Date(2024, 1, 29),  // leap year 2024-02-29
+  new Date(2025, 11, 31), // 2025-12-31
+  new Date(2026, 9, 5),   // 2026-10-05
+  new Date(2026, 10, 10), // 2026-11-10
+];
+for (const d of sampleDates) {
+  assert.strictEqual(
+    getTodayDateString(d),
+    moment(d).format("YYYY-MM-DD"),
+    `getTodayDateString mismatch for date ${d.toISOString()}`
+  );
+}
+
+console.log("✓ All 34 correctness assertions passed!\n");
 
 // === Benchmarks ===
 console.log("=== Running StatUtils performance benchmarks ===");
@@ -309,5 +333,25 @@ console.log(`StatsManager daily totals Object.values (${mockModFiles ? Object.ke
 console.log(`StatsManager daily totals for..in       (${mockModFiles ? Object.keys(mockModFiles).length : 0} files x ${aggIters} runs): ${aggOptDuration}ms`);
 const aggSpeedup = (aggOrigDuration / aggOptDuration).toFixed(2);
 console.log(`Speedup: ${aggSpeedup}x faster (${((1 - aggOptDuration / aggOrigDuration) * 100).toFixed(1)}% reduction in CPU time)`);
+
+// Benchmark 8: getTodayDateString vs moment().format("YYYY-MM-DD")
+console.log("\n=== Running StatsManager date string benchmarks ===");
+const dateIters = 100000;
+const tStartMoment = Date.now();
+for (let iter = 0; iter < dateIters; iter++) {
+  moment().format("YYYY-MM-DD");
+}
+const momentDuration = Date.now() - tStartMoment;
+
+const tStartNative = Date.now();
+for (let iter = 0; iter < dateIters; iter++) {
+  getTodayDateString();
+}
+const nativeDuration = Date.now() - tStartNative;
+
+console.log(`moment().format("YYYY-MM-DD") (${dateIters} runs): ${momentDuration}ms`);
+console.log(`getTodayDateString()          (${dateIters} runs): ${nativeDuration}ms`);
+const dateSpeedup = (momentDuration / nativeDuration).toFixed(2);
+console.log(`Speedup: ${dateSpeedup}x faster (${((1 - nativeDuration / momentDuration) * 100).toFixed(1)}% reduction in CPU time)`);
 
 console.log("\n✓ All benchmark runs completed successfully!");
