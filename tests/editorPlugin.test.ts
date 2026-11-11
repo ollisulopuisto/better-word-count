@@ -350,4 +350,283 @@ console.log(
 const speedupComments = (durStripOrigComments / durStripOptComments).toFixed(2);
 console.log(`Speedup (notes with comments): ${speedupComments}x faster\n`);
 
+// =====================================================================
+// mkDeco Section Word Count Accumulation Correctness and Benchmark Tests
+// =====================================================================
+console.log("\n=== Running mkDeco section count accumulation correctness tests ===");
+
+interface SectionCountData {
+  line: number;
+  level: number;
+  self: number;
+  total: number;
+  pos: number;
+}
+
+function accumulateSectionCountsOriginal(
+  linesData: { level: number | null; count: number; line: number; pos: number }[]
+): SectionCountData[] {
+  const sectionCounts: SectionCountData[] = [];
+  const nested: SectionCountData[] = [];
+
+  for (let i = 0; i < linesData.length; i++) {
+    const item = linesData[i];
+    const level = item.level;
+    const prevHeading = nested.length > 0 ? nested[nested.length - 1] : undefined;
+
+    if (level) {
+      if (!prevHeading || level > prevHeading.level) {
+        nested.push({
+          line: item.line,
+          level,
+          self: 0,
+          total: 0,
+          pos: item.pos,
+        });
+      } else if (prevHeading.level === level) {
+        const nestedHeading = nested.pop();
+        sectionCounts.push(nestedHeading);
+        nested.push({
+          line: item.line,
+          level,
+          self: 0,
+          total: 0,
+          pos: item.pos,
+        });
+      } else if (prevHeading.level > level) {
+        for (let j = nested.length - 1; j >= 0; j--) {
+          const nestedHeading = nested[j];
+          if (level < nestedHeading.level) {
+            const popped = nested.pop();
+            sectionCounts.push(popped);
+            if (j === 0) {
+              nested.push({
+                line: item.line,
+                level,
+                self: 0,
+                total: 0,
+                pos: item.pos,
+              });
+            }
+            continue;
+          }
+          if (level === nestedHeading.level) {
+            const popped = nested.pop();
+            sectionCounts.push(popped);
+            nested.push({
+              line: item.line,
+              level,
+              self: 0,
+              total: 0,
+              pos: item.pos,
+            });
+            break;
+          }
+          if (level > nestedHeading.level) {
+            nested.push({
+              line: item.line,
+              level,
+              self: 0,
+              total: 0,
+              pos: item.pos,
+            });
+            break;
+          }
+        }
+      }
+    } else if (nested.length) {
+      const count = item.count;
+      for (const heading of nested) {
+        if (heading === prevHeading) {
+          heading.self += count;
+        }
+        heading.total += count;
+      }
+    }
+  }
+
+  if (nested.length) sectionCounts.push(...nested);
+  sectionCounts.sort((a, b) => a.line - b.line);
+  return sectionCounts;
+}
+
+function accumulateSectionCountsOptimized(
+  linesData: { level: number | null; count: number; line: number; pos: number }[]
+): SectionCountData[] {
+  const sectionCounts: SectionCountData[] = [];
+  const nested: SectionCountData[] = [];
+
+  for (let i = 0; i < linesData.length; i++) {
+    const item = linesData[i];
+    const level = item.level;
+    const prevHeading = nested.length > 0 ? nested[nested.length - 1] : undefined;
+
+    if (level) {
+      if (!prevHeading || level > prevHeading.level) {
+        nested.push({
+          line: item.line,
+          level,
+          self: 0,
+          total: 0,
+          pos: item.pos,
+        });
+      } else if (prevHeading.level === level) {
+        const nestedHeading = nested.pop();
+        sectionCounts.push(nestedHeading);
+        nested.push({
+          line: item.line,
+          level,
+          self: 0,
+          total: 0,
+          pos: item.pos,
+        });
+      } else if (prevHeading.level > level) {
+        for (let j = nested.length - 1; j >= 0; j--) {
+          const nestedHeading = nested[j];
+          if (level < nestedHeading.level) {
+            const popped = nested.pop();
+            sectionCounts.push(popped);
+            if (j === 0) {
+              nested.push({
+                line: item.line,
+                level,
+                self: 0,
+                total: 0,
+                pos: item.pos,
+              });
+            }
+            continue;
+          }
+          if (level === nestedHeading.level) {
+            const popped = nested.pop();
+            sectionCounts.push(popped);
+            nested.push({
+              line: item.line,
+              level,
+              self: 0,
+              total: 0,
+              pos: item.pos,
+            });
+            break;
+          }
+          if (level > nestedHeading.level) {
+            nested.push({
+              line: item.line,
+              level,
+              self: 0,
+              total: 0,
+              pos: item.pos,
+            });
+            break;
+          }
+        }
+      }
+    } else if (nested.length) {
+      const count = item.count;
+      if (count !== 0) {
+        for (let k = 0, nLen = nested.length; k < nLen; k++) {
+          nested[k].total += count;
+        }
+        prevHeading.self += count;
+      }
+    }
+  }
+
+  if (nested.length) sectionCounts.push(...nested);
+  sectionCounts.sort((a, b) => a.line - b.line);
+  return sectionCounts;
+}
+
+// Test cases covering complex section hierarchies with blank/zero-count lines
+const sampleSectionDoc = [
+  { level: 1, count: 0, line: 1, pos: 10 },       // # Title
+  { level: null, count: 20, line: 2, pos: 30 },   // text under h1
+  { level: null, count: 0, line: 3, pos: 31 },    // empty line under h1
+  { level: 2, count: 0, line: 4, pos: 50 },       // ## Subtitle 1
+  { level: null, count: 15, line: 5, pos: 70 },   // text under h2
+  { level: null, count: 0, line: 6, pos: 71 },    // empty line under h2
+  { level: 3, count: 0, line: 7, pos: 90 },       // ### Sub-sub 1
+  { level: null, count: 30, line: 8, pos: 125 },  // text under h3
+  { level: 2, count: 0, line: 9, pos: 145 },      // ## Subtitle 2
+  { level: null, count: 25, line: 10, pos: 175 }, // text under h2
+  { level: 1, count: 0, line: 11, pos: 195 },     // # Title 2
+  { level: null, count: 0, line: 12, pos: 196 },  // empty line
+  { level: null, count: 50, line: 13, pos: 250 }, // text under h1
+];
+
+const origSections = accumulateSectionCountsOriginal(sampleSectionDoc);
+const optSections = accumulateSectionCountsOptimized(sampleSectionDoc);
+
+assert.deepStrictEqual(optSections, origSections, "Section count accumulation must match original exactly");
+assert.strictEqual(optSections.length, 5, "5 sections expected");
+// Verify expected values
+// Section 1: # Title (line 1): self = 20, total = 20 + 15 + 30 + 25 = 90
+assert.strictEqual(optSections[0].self, 20);
+assert.strictEqual(optSections[0].total, 90);
+// Section 2: ## Subtitle 1 (line 4): self = 15, total = 15 + 30 = 45
+assert.strictEqual(optSections[1].self, 15);
+assert.strictEqual(optSections[1].total, 45);
+// Section 3: ### Sub-sub 1 (line 7): self = 30, total = 30
+assert.strictEqual(optSections[2].self, 30);
+assert.strictEqual(optSections[2].total, 30);
+// Section 4: ## Subtitle 2 (line 9): self = 25, total = 25
+assert.strictEqual(optSections[3].self, 25);
+assert.strictEqual(optSections[3].total, 25);
+// Section 5: # Title 2 (line 11): self = 50, total = 50
+assert.strictEqual(optSections[4].self, 50);
+assert.strictEqual(optSections[4].total, 50);
+
+console.log("✓ All section count accumulation correctness assertions passed!\n");
+
+// === Benchmarks for Section Count Accumulation ===
+console.log("=== Running mkDeco section count accumulation performance benchmarks ===");
+
+// Build realistic 3,000 line document data: 50 headings with 4 nesting levels, 30% empty lines
+const benchmarkSectionLines: { level: number | null; count: number; line: number; pos: number }[] = [];
+let currentOffset = 0;
+for (let i = 1; i <= 3000; i++) {
+  let lvl: number | null = null;
+  let wordCount = 0;
+  if (i % 60 === 1) {
+    lvl = 1;
+  } else if (i % 60 === 15) {
+    lvl = 2;
+  } else if (i % 60 === 30) {
+    lvl = 3;
+  } else if (i % 60 === 45) {
+    lvl = 4;
+  } else if (i % 3 === 0) {
+    wordCount = 0; // empty line
+  } else {
+    wordCount = 15; // regular line
+  }
+
+  benchmarkSectionLines.push({
+    level: lvl,
+    count: wordCount,
+    line: i,
+    pos: currentOffset + 50,
+  });
+  currentOffset += 50;
+}
+
+const sectionIters = 2000;
+
+const tStartOrigSection = Date.now();
+for (let iter = 0; iter < sectionIters; iter++) {
+  accumulateSectionCountsOriginal(benchmarkSectionLines);
+}
+const durOrigSection = Date.now() - tStartOrigSection;
+
+const tStartOptSection = Date.now();
+for (let iter = 0; iter < sectionIters; iter++) {
+  accumulateSectionCountsOptimized(benchmarkSectionLines);
+}
+const durOptSection = Date.now() - tStartOptSection;
+
+console.log(`Original section accumulation  (3,000 lines x ${sectionIters} runs): ${durOrigSection}ms`);
+console.log(`Optimized section accumulation (3,000 lines x ${sectionIters} runs): ${durOptSection}ms`);
+const sectionSpeedup = (durOrigSection / durOptSection).toFixed(2);
+console.log(`Speedup: ${sectionSpeedup}x faster (${((1 - durOptSection / durOrigSection) * 100).toFixed(1)}% reduction in CPU time)\n`);
+
 console.log("✓ All editor plugin tests and benchmarks completed successfully!");
